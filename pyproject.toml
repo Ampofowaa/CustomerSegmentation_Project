@@ -1,0 +1,47 @@
+[project]
+name = "customer-segmentation"
+version = "0.1.0"
+description = "A production-oriented customer segmentation pipeline that clusters retail customers by purchasing behavior and demographics to support targeted marketing decisions."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "joblib>=1.5.3",
+    "matplotlib>=3.11.1",
+    "numpy>=2.5.2",
+    "pandas>=3.0.5",
+    "pydantic>=2.13.4",
+    "scikit-learn>=1.9.0",
+    "seaborn>=0.13.2",
+    "streamlit>=1.61.1",
+    "uvicorn[standard]>=0.52.3",
+]
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "detect-secrets>=1.5.0",
+    "mypy>=2.3.1",
+    "pandas-stubs>=3.0.5.260730",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "ruff>=0.16.3",
+    "types-requests>=2.33.0.20260712",
+]
+
+[tool.ruff]
+target-version = "py312"
+extend-include = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+disallow_untyped_defs = true
+exclude = ["notebooks/"]
