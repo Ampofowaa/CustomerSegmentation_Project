@@ -55,9 +55,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
     n_high_income = (df["Income"] > config.INCOME_MAX).sum()
     if n_high_income:
-        logger.info(
-            "Capping %d rows with Income above %d", n_high_income, config.INCOME_MAX
-        )
+        logger.info("Capping %d rows with Income above %d", n_high_income, config.INCOME_MAX)
         df["Income"] = df["Income"].clip(upper=config.INCOME_MAX)
 
     return df.reset_index(drop=True)

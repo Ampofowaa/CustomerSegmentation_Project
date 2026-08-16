@@ -17,6 +17,7 @@ import json
 import logging
 
 import joblib
+import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
@@ -45,17 +46,14 @@ def build_pipeline(n_clusters: int) -> Pipeline:
     )
 
 
-def evaluate_k_range(X: pd.DataFrame, k_range=config.K_SEARCH_RANGE) -> dict:
+#     return pipe, labels, sil
+def evaluate_k_range(X: pd.DataFrame, k_range: range = config.K_SEARCH_RANGE) -> dict[int, dict[str, float]]:
     """
     Fit a full scaler->KMeans pipeline for each candidate K and record
     inertia (elbow) + silhouette score. Returns a dict keyed by k so the
     caller can plot/justify a choice.
-
-    Note: X is the RAW (unscaled) feature matrix — each candidate pipeline
-    fits its own scaler, exactly mirroring what happens at final training
-    time, rather than reusing one scaler fit outside the loop.
     """
-    results = {}
+    results: dict[int, dict[str, float]] = {}
     for k in k_range:
         pipe = build_pipeline(k)
         labels = pipe.fit_predict(X)
@@ -73,7 +71,7 @@ def evaluate_k_range(X: pd.DataFrame, k_range=config.K_SEARCH_RANGE) -> dict:
     return results
 
 
-def fit_pipeline(X: pd.DataFrame, n_clusters: int = config.N_CLUSTERS):
+def fit_pipeline(X: pd.DataFrame, n_clusters: int = config.N_CLUSTERS) -> tuple[Pipeline, np.ndarray, float]:
     """
     Fit the scaler -> KMeans pipeline on the given (raw, unscaled) feature
     matrix. Returns (pipeline, cluster_labels, silhouette_score).
@@ -82,7 +80,7 @@ def fit_pipeline(X: pd.DataFrame, n_clusters: int = config.N_CLUSTERS):
     labels = pipe.fit_predict(X)
 
     X_scaled = pipe.named_steps["scaler"].transform(X)
-    sil = silhouette_score(X_scaled, labels)
+    sil = float(silhouette_score(X_scaled, labels))
     logger.info("Final pipeline: k=%d silhouette=%.4f", n_clusters, sil)
 
     return pipe, labels, sil
@@ -97,7 +95,7 @@ def save_artifacts(pipeline: Pipeline, metrics: dict) -> None:
     logger.info("Saved metrics  -> %s", config.METRICS_PATH)
 
 
-def cluster_profile(df: pd.DataFrame, labels, extra_cols=None) -> pd.DataFrame:
+def cluster_profile(df: pd.DataFrame, labels: np.ndarray, extra_cols: list[str] | None = None) -> pd.DataFrame:
     """
     Mean of each feature per cluster — the table you actually read to name
     the clusters. Optionally include non-modeling columns (e.g. Education,

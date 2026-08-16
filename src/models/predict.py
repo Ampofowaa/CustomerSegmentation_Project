@@ -10,12 +10,13 @@ import functools
 
 import joblib
 import pandas as pd
+from sklearn.pipeline import Pipeline
 
 import config
 
 
 @functools.lru_cache(maxsize=1)
-def load_pipeline():
+def load_pipeline() -> Pipeline:
     """Load the fitted scaler->KMeans pipeline once per process (cached)."""
     return joblib.load(config.PIPELINE_PATH)
 

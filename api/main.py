@@ -1,6 +1,7 @@
-from api.schemas import CustomerFeatures, SegmentPrediction
 from fastapi import FastAPI, HTTPException
-from src.predict import predict_segment
+
+from api.schema import CustomerFeatures, SegmentPrediction
+from src.models.predict import predict_segment
 
 app = FastAPI(
     title="Customer Segmentation API",
@@ -9,13 +10,8 @@ app = FastAPI(
 )
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
 @app.post("/predict", response_model=SegmentPrediction)
-def predict(customer: CustomerFeatures):
+def predict(customer: CustomerFeatures) -> SegmentPrediction:
     try:
         result = predict_segment(customer.model_dump())
     except ValueError as e:

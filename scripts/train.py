@@ -15,6 +15,8 @@ import logging
 import sys
 from pathlib import Path
 
+import config
+
 # Allow running as `python scripts/train.py` from the project root without
 # installing the package.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -22,20 +24,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.pipeline import run_training_pipeline  # noqa: E402
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Train the customer segmentation model"
-    )
-    parser.add_argument(
-        "--n-clusters", type=int, default=None, help="Override config.N_CLUSTERS"
-    )
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Train the customer segmentation model")
+    parser.add_argument("--n-clusters", type=int, default=None, help="Override config.N_CLUSTERS")
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
-
-    import config
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     n_clusters = args.n_clusters or config.N_CLUSTERS
     metrics = run_training_pipeline(n_clusters=n_clusters)

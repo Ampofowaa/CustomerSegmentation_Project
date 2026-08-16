@@ -5,6 +5,15 @@ build/
 dist/
 wheels/
 *.egg-info
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.pyc
+
 
 # Virtual environments
 .venv
+
+# Model
+*.pkl
+RECOMMENDATIONS.md

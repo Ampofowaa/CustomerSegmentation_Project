@@ -6,6 +6,7 @@ notebook or a test — the orchestration logic lives in exactly one place.
 """
 
 import logging
+from typing import Any, cast
 
 import pandas as pd
 
@@ -17,16 +18,13 @@ from src.models.train import cluster_profile, fit_pipeline, save_artifacts
 logger = logging.getLogger(__name__)
 
 
-def run_training_pipeline(n_clusters: int = config.N_CLUSTERS) -> dict:
+def run_training_pipeline(n_clusters: int = config.N_CLUSTERS) -> dict[str, Any]:
     logger.info("Starting training pipeline (k=%d)", n_clusters)
 
     df = load_clean_data()
     df = engineer_features(df)
     X = build_model_matrix(df)
 
-    # fit_pipeline fits StandardScaler and KMeans together as one
-    # sklearn.pipeline.Pipeline object, so there's a single artifact to
-    # save/load rather than a scaler and a model that could get out of sync.
     pipeline, labels, silhouette = fit_pipeline(X, n_clusters=n_clusters)
 
     profile = cluster_profile(df, labels)
@@ -36,9 +34,7 @@ def run_training_pipeline(n_clusters: int = config.N_CLUSTERS) -> dict:
         "n_clusters": n_clusters,
         "silhouette_score": silhouette,
         "n_rows_trained": len(df),
-        "cluster_sizes": {
-            int(k): int(v) for k, v in pd.Series(labels).value_counts().items()
-        },
+        "cluster_sizes": {cast(int, k): int(v) for k, v in pd.Series(labels).value_counts().items()},
     }
 
     save_artifacts(pipeline, metrics)
@@ -46,7 +42,5 @@ def run_training_pipeline(n_clusters: int = config.N_CLUSTERS) -> dict:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     run_training_pipeline()
