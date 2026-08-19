@@ -81,7 +81,7 @@ def test_build_model_matrix_has_expected_columns_in_order() -> None:
 
 def test_build_model_matrix_raises_on_missing_feature() -> None:
     df = pd.DataFrame([{f: 1 for f in config.FEATURES[:-1]}])  # drop last feature
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match=config.FEATURES[-1]):
         build_model_matrix(df)
 
 
