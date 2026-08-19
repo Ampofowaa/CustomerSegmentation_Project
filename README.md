@@ -186,6 +186,12 @@ Host ports are set in `docker-compose.yml` — change the left side of the
 running locally; the containers still talk to each other over the internal
 Docker network regardless of host port.
 
+The Streamlit app has two tabs:
+- **Single Prediction** — a form for one customer, calls `POST /predict`.
+- **Batch Prediction** — upload a CSV, calls `POST /predict/batch`, and
+  download the scored result. `sample_batch_customers.csv` in the repo
+  root is a ready-made file to try this with.
+
 ## API
 
 `POST /predict`
@@ -206,6 +212,16 @@ curl -X POST http://localhost:8100/predict \
 
 ```json
 {"cluster": 4, "label": "High-Value Customers"}
+```
+
+`POST /predict/batch` — upload a CSV with (at least) the same feature
+columns; any extra columns (e.g. a customer ID) are echoed back. Returns a
+downloadable CSV with `cluster`, `cluster_name`, and `scored_at` appended.
+
+```bash
+curl -X POST http://localhost:8100/predict/batch \
+  -F "file=@sample_batch_customers.csv" \
+  -o segmented_customers.csv
 ```
 
 ## CI
