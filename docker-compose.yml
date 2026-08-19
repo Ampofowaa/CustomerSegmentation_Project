@@ -4,16 +4,16 @@ services:
       context: .
       dockerfile: docker/Dockerfile.fastapi
     ports:
-      - "8000:8000"
+      - "8100:8000"
     volumes:
-      - ./models:/code/models:ro
+      - ./models:/app/models:ro
 
   streamlit:
     build:
       context: .
       dockerfile: docker/Dockerfile.streamlit
     ports:
-      - "8501:8501"
+      - "8600:8501"
     environment:
       - API_URL=http://api:8000
     depends_on:

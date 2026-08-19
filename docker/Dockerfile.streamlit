@@ -1,0 +1,30 @@
+# ---- Builder stage ----
+FROM python:3.12-slim AS builder
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+# Copy dependency files first for better layer caching
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --extra ui --no-install-project
+
+# Copy only the code this service needs
+COPY src/ui/ ./src/ui/
+
+
+# ---- Final stage ----
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Bring over the built virtual environment and code from the builder
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src/ui ./src/ui
+
+ENV PATH="/app/.venv/bin:$PATH"
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "src/ui/customer_segmentation.py", "--server.address=0.0.0.0", "--server.port=8501"]
