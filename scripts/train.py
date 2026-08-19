@@ -15,12 +15,11 @@ import logging
 import sys
 from pathlib import Path
 
-import config
-
 # Allow running as `python scripts/train.py` from the project root without
 # installing the package.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import config  # noqa: E402
 from src.pipeline import run_training_pipeline  # noqa: E402
 
 

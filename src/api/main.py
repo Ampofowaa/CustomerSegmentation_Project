@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 
-from api.schema import CustomerFeatures, SegmentPrediction
+from src.api.schema import CustomerFeatures, SegmentPrediction
 from src.models.predict import predict_segment
 
 app = FastAPI(
@@ -18,7 +18,7 @@ def predict(customer: CustomerFeatures) -> SegmentPrediction:
         raise HTTPException(status_code=422, detail=str(e))
     except FileNotFoundError:
         raise HTTPException(
-            status_code=503,
+            status_code=500,
             detail="Model pipeline not found. Has scripts/train.py been run?",
         )
 

@@ -8,6 +8,7 @@ capping) so a regression gets caught instead of silently reshipped.
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -20,7 +21,7 @@ from src.features.engineer import add_age, add_total_spending, build_model_matri
 from src.models.train import fit_pipeline
 
 
-def _make_raw_df(**overrides):
+def _make_raw_df(**overrides: Any) -> pd.DataFrame:
     base = {
         "Year_Birth": [1985],
         "Income": [50000.0],
@@ -37,27 +38,27 @@ def _make_raw_df(**overrides):
     return pd.DataFrame(base)
 
 
-def test_clean_data_drops_missing_income():
+def test_clean_data_drops_missing_income() -> None:
     df = _make_raw_df(Income=[None])
     cleaned = clean_data(df)
     assert cleaned["Income"].isna().sum() == 0
     assert len(cleaned) == 0
 
 
-def test_clean_data_caps_high_income():
+def test_clean_data_caps_high_income() -> None:
     df = _make_raw_df(Income=[666666.0])
     cleaned = clean_data(df)
     assert cleaned["Income"].iloc[0] == config.INCOME_MAX
 
 
-def test_clean_data_caps_implausible_birth_year():
+def test_clean_data_caps_implausible_birth_year() -> None:
     df = _make_raw_df(Year_Birth=[1893])
     cleaned = clean_data(df)
     max_birth_year = pd.Timestamp.now().year - config.AGE_MAX
     assert cleaned["Year_Birth"].iloc[0] == max_birth_year
 
 
-def test_add_age_does_not_pollute_other_columns():
+def test_add_age_does_not_pollute_other_columns() -> None:
     """Regression test for the `df['Age'] = df['current_year'] = ...` bug."""
     df = _make_raw_df()
     result = add_age(df)
@@ -65,26 +66,26 @@ def test_add_age_does_not_pollute_other_columns():
     assert "Age" in result.columns
 
 
-def test_add_total_spending_sums_correctly():
+def test_add_total_spending_sums_correctly() -> None:
     df = _make_raw_df()
     result = add_total_spending(df)
     expected = 100 + 10 + 50 + 20 + 5 + 15
     assert result["Total_Spending"].iloc[0] == expected
 
 
-def test_build_model_matrix_has_expected_columns_in_order():
+def test_build_model_matrix_has_expected_columns_in_order() -> None:
     df = pd.DataFrame([{f: 1 for f in config.FEATURES}])
     X = build_model_matrix(df)
     assert list(X.columns) == config.FEATURES
 
 
-def test_build_model_matrix_raises_on_missing_feature():
+def test_build_model_matrix_raises_on_missing_feature() -> None:
     df = pd.DataFrame([{f: 1 for f in config.FEATURES[:-1]}])  # drop last feature
     with pytest.raises(KeyError):
         build_model_matrix(df)
 
 
-def _make_toy_feature_matrix(n=30):
+def _make_toy_feature_matrix(n: int = 30) -> pd.DataFrame:
     """Small synthetic feature matrix with two obvious blobs, for fast tests."""
     import numpy as np
 
@@ -94,7 +95,7 @@ def _make_toy_feature_matrix(n=30):
     return pd.DataFrame(np.vstack([blob_a, blob_b]), columns=config.FEATURES)
 
 
-def test_pipeline_is_reproducible_given_fixed_random_state():
+def test_pipeline_is_reproducible_given_fixed_random_state() -> None:
     """random_state should make repeated fits on the same data identical."""
     X = _make_toy_feature_matrix()
 
@@ -105,7 +106,7 @@ def test_pipeline_is_reproducible_given_fixed_random_state():
     assert sil_a == pytest.approx(sil_b)
 
 
-def test_pipeline_predict_matches_scaler_plus_kmeans_manually():
+def test_pipeline_predict_matches_scaler_plus_kmeans_manually() -> None:
     """The pipeline's .predict() should equal manually scaling then predicting."""
     X = _make_toy_feature_matrix()
     pipe, labels, _ = fit_pipeline(X, n_clusters=2)
