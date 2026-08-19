@@ -44,50 +44,12 @@ customer_segmentation/
 └── pyproject.toml
 ```
 
-## Why this layout
-
-- **Business goal drives the modeling, not the other way around.** The
-  notebook opens with a Business Goal section — what decision this
-  segmentation is meant to drive, who uses it, and how success is judged —
-  before any code runs. Feature choices, k, and cluster names all get
-  justified against that goal rather than chosen for technical convenience.
-- **Notebook = analysis, package = production.** The notebook is for
-  exploring the data and justifying decisions (why 5 clusters, which
-  features). Nothing in production imports from the notebook — it imports
-  from `src/`. If you find a better feature or cleaning step in the
-  notebook, you move it into `src/` deliberately, not by copy-pasting
-  notebook cells into a script.
-- **One package root.** `api/` and `ui/` live under `src/` alongside the
-  training code, rather than as separate top-level import roots — one
-  package to install, lint, type-check, and Dockerize.
-- **One feature contract.** `config.FEATURES` is defined once. Training
-  (`src/pipeline.py`) and inference (`src/models/predict.py`) both build
-  their matrix from it, in the same order. This is what the original
-  `segmentation.py` was missing — it manually rebuilt the DataFrame and
-  relied on hoping the column order matched what the notebook trained on.
-- **One pipeline artifact, not a scaler+model pair.** `src/models/train.py`
-  builds an `sklearn.pipeline.Pipeline` combining `StandardScaler` and
-  `KMeans`, fits it as a single unit, and saves it as one file
-  (`models/segmentation_pipeline.pkl`). Two separate artifacts can silently
-  drift apart — retrain the model, forget to re-save the scaler, ship a
-  stale one — and nothing catches it because `transform()` doesn't validate
-  against the model it's paired with. A pipeline makes "scale, then
-  cluster" one atomic, versioned unit: load it, call `.predict()`, done.
-- **Testable units.** `clean_data`, `engineer_features`, `build_model_matrix`,
-  and the pipeline itself are covered by unit tests, including a
-  reproducibility test (same data + same `random_state` -> identical
-  cluster assignments) and a test that `pipeline.predict()` matches scaling
-  and predicting manually. A future change (e.g. a new outlier rule) gets
-  caught by `pytest` before it reaches production, instead of being
-  discovered when cluster predictions look wrong in the app.
-- **Reproducibility.** `random_state` + `n_init` are set once in `config.py`
-  and baked into every `KMeans` instantiation (including inside the k-search
-  loop), so re-training produces the same clusters given the same data —
-  required if you ever need to explain to a stakeholder why a customer's
-  segment changed. `dvc.yaml` tracks the training stage's inputs and outputs
-  so `dvc repro` only re-trains when data or code actually changed, and
-  `models/segmentation_pipeline.pkl` is DVC-tracked rather than committed to
-  Git.
+`api/` and `ui/` live under `src/` alongside the training code rather than
+as separate top-level import roots — one package to install, lint,
+type-check, and Dockerize. The notebook opens with a Business Goal section
+(what decision this segmentation drives, who uses it, what "good" looks
+like) before any code runs, so feature choices, k, and cluster names get
+justified against that goal rather than picked for technical convenience.
 
 ## Dataset
 
@@ -105,6 +67,39 @@ income value) — see `config.AGE_MAX` / `config.INCOME_MAX`. `src/features/engi
 derives `Age` and `Total_Spending` and assembles the final `config.FEATURES`
 set (7 features) that the model actually trains on. 2,216 of the original
 2,240 rows survive cleaning.
+
+### Why these 7 features (and not the rest)
+
+`config.FEATURES = [Age, Income, Total_Spending, NumWebPurchases,
+NumStorePurchases, NumWebVisitsMonth, Recency]`. Everything else in the raw
+dataset was considered and dropped for a specific reason, not by accident —
+see the "Feature Selection Rationale" cell in `notebooks/Analysis_Model.ipynb`
+for the correlation numbers behind these calls:
+
+- **`Kidhome` / `Teenhome` (and the engineered `TotalNo_Children`)** —
+  strongly correlated with `Income` (r ≈ -0.51) and `Total_Spending`
+  (r ≈ -0.50). K-Means clusters on Euclidean distance, so keeping a feature
+  that's just a proxy for income/spend would double-count that signal.
+  `add_total_children()` in `src/features/engineer.py` still computes
+  `TotalNo_Children` — it's available for exploration/reporting, it just
+  isn't part of the model matrix.
+- **`NumCatalogPurchases`** — highly correlated with `Income` (r ≈ 0.69) and
+  `Total_Spending` (r ≈ 0.78); `NumWebPurchases` and `NumStorePurchases`
+  already cover purchase-channel behavior, so this is redundant.
+- **`NumDealsPurchases`** — weak correlation with every other feature
+  (|r| < 0.11). It doesn't separate customers into meaningfully different
+  groups, so it's mostly noise for a distance-based algorithm.
+- **`AcceptedCmp1`–`5` and `Response`** — these record how customers reacted
+  to *past* campaigns. Using them to build segments that then drive *future*
+  targeting would leak old targeting decisions into new ones.
+- **`Complain`** — 21 of 2,216 rows are 1; near-zero variance, contributes
+  almost nothing to distance-based clustering.
+- **`Customer_Tenure`** (engineered in `add_customer_tenure()`) — weakly
+  correlated with `Income`/`Total_Spending` (r ≈ 0.16) and largely redundant
+  with `Recency` for capturing engagement. Computed but not fed to the model.
+- **`Education`, `Marital_Status`** — categorical; K-Means needs numeric
+  distances, and one-hot-encoding them would add several low-signal
+  dimensions relative to the behavioral/value features already in play.
 
 ## Results
 
@@ -191,6 +186,12 @@ Host ports are set in `docker-compose.yml` — change the left side of the
 running locally; the containers still talk to each other over the internal
 Docker network regardless of host port.
 
+The Streamlit app has two tabs:
+- **Single Prediction** — a form for one customer, calls `POST /predict`.
+- **Batch Prediction** — upload a CSV, calls `POST /predict/batch`, and
+  download the scored result. `sample_batch_customers.csv` in the repo
+  root is a ready-made file to try this with.
+
 ## API
 
 `POST /predict`
@@ -213,12 +214,17 @@ curl -X POST http://localhost:8100/predict \
 {"cluster": 4, "label": "High-Value Customers"}
 ```
 
+`POST /predict/batch` — upload a CSV with (at least) the same feature
+columns; any extra columns (e.g. a customer ID) are echoed back. Returns a
+downloadable CSV with `cluster`, `cluster_name`, and `scored_at` appended.
+
+```bash
+curl -X POST http://localhost:8100/predict/batch \
+  -F "file=@sample_batch_customers.csv" \
+  -o segmented_customers.csv
+```
+
 ## CI
 
 `.github/workflows/ci.yaml` runs on every push and pull request: `ruff`,
 `black --check`, `mypy`, and `pytest`, all via `uv`.
-
-## See also
-
-`RECOMMENDATIONS.md` — the specific issues found in the original notebook
-and app, and how each was addressed in this structure.

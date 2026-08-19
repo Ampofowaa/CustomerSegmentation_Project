@@ -13,6 +13,7 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 
 import config
+from src.features.engineer import build_model_matrix
 
 
 @functools.lru_cache(maxsize=1)
@@ -32,20 +33,34 @@ def predict_segment(feature_row: dict) -> dict:
 
     Returns: {"cluster": int, "cluster_name": str}
     """
-    missing = set(config.FEATURES) - set(feature_row)
-    if missing:
-        raise ValueError(f"Missing required features: {missing}")
-
-    pipeline = load_pipeline()
-
-    # Build the row in config.FEATURES order — never trust dict insertion
-    # order or the caller's ordering. The pipeline handles scaling and
-    # clustering as one call, so there's no separate transform() step to
-    # get out of sync.
-    X = pd.DataFrame([{f: feature_row[f] for f in config.FEATURES}])
-    cluster = int(pipeline.predict(X)[0])
+    X = build_model_matrix(pd.DataFrame([feature_row]))
+    cluster = int(load_pipeline().predict(X)[0])
 
     return {
         "cluster": cluster,
         "cluster_name": config.CLUSTER_NAMES.get(cluster, f"Cluster {cluster}"),
     }
+
+
+def predict_batch(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Score many customers at once.
+
+    df: any DataFrame containing at least the config.FEATURES columns
+    (extra columns, e.g. a customer ID, are echoed back untouched).
+
+    Returns a copy of df with three columns appended: "cluster",
+    "cluster_name", and "scored_at" (UTC date of this call, YYYY-MM-DD,
+    same value for every row — when this batch was run, not a per-row
+    date already present in the data). Raises the same ValueError as
+    predict_segment() — via build_model_matrix() — if a required feature
+    column is missing.
+    """
+    X = build_model_matrix(df)
+    clusters = load_pipeline().predict(X)
+
+    result = df.copy()
+    result["cluster"] = clusters.astype(int)
+    result["cluster_name"] = result["cluster"].map(config.CLUSTER_NAMES)
+    result["scored_at"] = pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d")
+    return result

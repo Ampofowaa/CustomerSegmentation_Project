@@ -1,4 +1,5 @@
 import os
+import re
 
 import requests
 import streamlit as st
@@ -8,33 +9,70 @@ import streamlit as st
 API_URL = os.environ.get("API_URL", "http://api:8000")
 
 st.title("Customer Segmentation App")
-st.write("Enter customer details to predict the segment")
 
-age = st.number_input("Age", min_value=18, max_value=100, value=35)
-income = st.number_input("Income", min_value=0, max_value=200_000, value=50_000)
-total_spending = st.number_input("Total Spending (sum of purchases)", min_value=0, max_value=5_000, value=1_000)
-num_web_purchases = st.number_input("Number of Web Purchases", min_value=0, max_value=100, value=10)
-num_store_purchases = st.number_input("Number of Store Purchases", min_value=0, max_value=100, value=10)
-num_web_visits = st.number_input("Number of Web Visits per Month", min_value=0, max_value=50, value=3)
-recency = st.number_input("Recency (days since last purchase)", min_value=0, max_value=365, value=30)
+single_tab, batch_tab = st.tabs(["Single Prediction", "Batch Prediction"])
 
-if st.button("Predict Segment"):
-    payload = {
-        "Age": age,
-        "Income": income,
-        "Total_Spending": total_spending,
-        "NumWebPurchases": num_web_purchases,
-        "NumStorePurchases": num_store_purchases,
-        "NumWebVisitsMonth": num_web_visits,
-        "Recency": recency,
-    }
-    try:
-        response = requests.post(f"{API_URL}/predict", json=payload, timeout=10)
-        response.raise_for_status()
-        result = response.json()
-        st.success(f"Predicted Segment: {result['label']} (Cluster {result['cluster']})")
-    except requests.exceptions.ConnectionError:
-        st.error(f"Could not reach the prediction API at {API_URL}. Is it running?")
-    except requests.exceptions.HTTPError as e:
-        detail = response.json().get("detail", str(e)) if response.content else str(e)
-        st.error(f"Prediction failed: {detail}")
+with single_tab:
+    st.write("Enter customer details to predict the segment")
+
+    age = st.number_input("Age", min_value=18, max_value=100, value=35)
+    income = st.number_input("Income", min_value=0, max_value=200_000, value=50_000)
+    total_spending = st.number_input("Total Spending (sum of purchases)", min_value=0, max_value=5_000, value=1_000)
+    num_web_purchases = st.number_input("Number of Web Purchases", min_value=0, max_value=100, value=10)
+    num_store_purchases = st.number_input("Number of Store Purchases", min_value=0, max_value=100, value=10)
+    num_web_visits = st.number_input("Number of Web Visits per Month", min_value=0, max_value=50, value=3)
+    recency = st.number_input("Recency (days since last purchase)", min_value=0, max_value=365, value=30)
+
+    if st.button("Predict Segment"):
+        payload = {
+            "Age": age,
+            "Income": income,
+            "Total_Spending": total_spending,
+            "NumWebPurchases": num_web_purchases,
+            "NumStorePurchases": num_store_purchases,
+            "NumWebVisitsMonth": num_web_visits,
+            "Recency": recency,
+        }
+        try:
+            response = requests.post(f"{API_URL}/predict", json=payload, timeout=10)
+            response.raise_for_status()
+            result = response.json()
+            st.success(f"Predicted Segment: {result['label']} (Cluster {result['cluster']})")
+        except requests.exceptions.ConnectionError:
+            st.error(f"Could not reach the prediction API at {API_URL}. Is it running?")
+        except requests.exceptions.HTTPError as e:
+            detail = response.json().get("detail", str(e)) if response.content else str(e)
+            st.error(f"Prediction failed: {detail}")
+
+with batch_tab:
+    st.write(
+        "Upload a CSV with (at least) the columns Age, Income, Total_Spending, "
+        "NumWebPurchases, NumStorePurchases, NumWebVisitsMonth, Recency — one "
+        "row per customer. Any other columns (e.g. a customer ID) are kept in "
+        "the output."
+    )
+
+    uploaded_file = st.file_uploader("Customer CSV", type="csv")
+
+    if uploaded_file is not None and st.button("Score CSV"):
+        try:
+            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
+            response = requests.post(f"{API_URL}/predict/batch", files=files, timeout=60)
+            response.raise_for_status()
+            st.success("Scored successfully.")
+
+            disposition = response.headers.get("content-disposition", "")
+            match = re.search(r"filename=([^;]+)", disposition)
+            file_name = match.group(1).strip() if match else "segmented_customers.csv"
+
+            st.download_button(
+                "Download segmented CSV",
+                data=response.content,
+                file_name=file_name,
+                mime="text/csv",
+            )
+        except requests.exceptions.ConnectionError:
+            st.error(f"Could not reach the prediction API at {API_URL}. Is it running?")
+        except requests.exceptions.HTTPError as e:
+            detail = response.json().get("detail", str(e)) if response.content else str(e)
+            st.error(f"Batch scoring failed: {detail}")

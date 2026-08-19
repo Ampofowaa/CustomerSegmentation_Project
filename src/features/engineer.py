@@ -51,4 +51,12 @@ def build_model_matrix(df: pd.DataFrame) -> pd.DataFrame:
     This is the function both training and inference call last, right
     before scaling — it's the contract that keeps them in sync.
     """
+    missing = [c for c in config.FEATURES if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"config.FEATURES references column(s) not present after "
+            f"cleaning/engineering: {missing}. Either fix the typo in "
+            f"config.FEATURES or add the missing column in "
+            f"src/features/engineer.py."
+        )
     return df[config.FEATURES].copy()
