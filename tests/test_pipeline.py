@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 from src.data.loader import clean_data
 from src.features.engineer import add_age, add_total_spending, build_model_matrix
-from src.models.train import fit_pipeline
+from src.models.train import check_cluster_stability, fit_pipeline
 
 
 def _make_raw_df(**overrides: Any) -> pd.DataFrame:
@@ -115,3 +115,24 @@ def test_pipeline_predict_matches_scaler_plus_kmeans_manually() -> None:
     manual_labels = pipe.named_steps["kmeans"].predict(manual_scaled)
 
     assert list(pipe.predict(X)) == list(manual_labels)
+
+
+def test_cluster_stability_is_high_for_well_separated_blobs() -> None:
+    """Two obvious blobs should get (near-)identical partitions across seeds."""
+    X = _make_toy_feature_matrix()
+    result = check_cluster_stability(X, n_clusters=2, random_states=(0, 1, 2))
+
+    assert result["mean_ari"] > 0.9
+    assert result["min_ari"] > 0.9
+
+
+def test_cluster_stability_uses_different_seeds_per_run() -> None:
+    """Regression test: build_pipeline() must actually vary by random_state."""
+    X = _make_toy_feature_matrix()
+    pipe_a = fit_pipeline(X, n_clusters=2)[0]
+    assert pipe_a.named_steps["kmeans"].random_state == config.RANDOM_STATE
+
+    from src.models.train import build_pipeline
+
+    pipe_b = build_pipeline(n_clusters=2, random_state=99)
+    assert pipe_b.named_steps["kmeans"].random_state == 99

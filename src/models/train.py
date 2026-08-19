@@ -13,6 +13,7 @@ Addresses the gaps flagged during review:
   load it, call .predict(), done.
 """
 
+import itertools
 import json
 import logging
 
@@ -20,7 +21,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -29,7 +30,7 @@ import config
 logger = logging.getLogger(__name__)
 
 
-def build_pipeline(n_clusters: int) -> Pipeline:
+def build_pipeline(n_clusters: int, random_state: int = config.RANDOM_STATE) -> Pipeline:
     """Construct an (unfit) scaler -> KMeans pipeline."""
     return Pipeline(
         steps=[
@@ -38,7 +39,7 @@ def build_pipeline(n_clusters: int) -> Pipeline:
                 "kmeans",
                 KMeans(
                     n_clusters=n_clusters,
-                    random_state=config.RANDOM_STATE,
+                    random_state=random_state,
                     n_init=config.N_INIT,
                 ),
             ),
@@ -84,6 +85,35 @@ def fit_pipeline(X: pd.DataFrame, n_clusters: int = config.N_CLUSTERS) -> tuple[
     logger.info("Final pipeline: k=%d silhouette=%.4f", n_clusters, sil)
 
     return pipe, labels, sil
+
+
+def check_cluster_stability(
+    X: pd.DataFrame,
+    n_clusters: int = config.N_CLUSTERS,
+    random_states: tuple[int, ...] = (0, 1, 2, 3, 4),
+) -> dict[str, float]:
+    """
+    Refit the pipeline with several different random_state seeds and
+    compare the resulting cluster assignments pairwise with the Adjusted
+    Rand Index (1.0 = identical partitions, ~0.0 = no better than chance).
+
+    A single random_state producing "good" clusters doesn't rule out that
+    they're an artifact of that particular centroid initialization — this
+    checks whether independent runs actually agree with each other.
+    """
+    labels_by_seed = {rs: build_pipeline(n_clusters, random_state=rs).fit_predict(X) for rs in random_states}
+
+    scores = [
+        adjusted_rand_score(labels_by_seed[a], labels_by_seed[b]) for a, b in itertools.combinations(random_states, 2)
+    ]
+    result = {"mean_ari": float(np.mean(scores)), "min_ari": float(np.min(scores))}
+    logger.info(
+        "Cluster stability across seeds %s: mean_ari=%.4f min_ari=%.4f",
+        random_states,
+        result["mean_ari"],
+        result["min_ari"],
+    )
+    return result
 
 
 def save_artifacts(pipeline: Pipeline, metrics: dict) -> None:
