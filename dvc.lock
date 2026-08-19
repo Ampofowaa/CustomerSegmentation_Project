@@ -1,0 +1,42 @@
+schema: '2.0'
+stages:
+  train:
+    cmd: python scripts/train.py
+    deps:
+    - path: config.py
+      hash: md5
+      md5: 8bb3616254beb9207b67b7fa419d1f4b
+      size: 2796
+    - path: data/customer_segmentation.csv
+      hash: md5
+      md5: d732c77739db14936987f6f6fbd0e770
+      size: 220188
+    - path: scripts/train.py
+      hash: md5
+      md5: 4bf9e6f5c2c9fe91ffb44faf841f21fd
+      size: 1369
+    - path: src/data/loader.py
+      hash: md5
+      md5: a54248e63c3c161d1e6dc4b775c88110
+      size: 2263
+    - path: src/features/engineer.py
+      hash: md5
+      md5: 52f1c7c7b512665229cc3fd34ea1f0f5
+      size: 1599
+    - path: src/models/train.py
+      hash: md5
+      md5: 1710bae0d6678f604b97e671871a6a1a
+      size: 3786
+    - path: src/pipeline.py
+      hash: md5
+      md5: 7c6462175cb8a352395a8287e223903e
+      size: 1394
+    outs:
+    - path: models/segmentation_pipeline.pkl
+      hash: md5
+      md5: ecc939357998597d47bcad32ccf9250c
+      size: 10809
+    - path: models/training_metrics.json
+      hash: md5
+      md5: 1a8cd991856db1fc9a7692efdce22735
+      size: 195

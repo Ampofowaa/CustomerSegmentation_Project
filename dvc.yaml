@@ -1,0 +1,16 @@
+stages:
+  train:
+    cmd: python scripts/train.py
+    deps:
+      - data/customer_segmentation.csv
+      - config.py
+      - scripts/train.py
+      - src/pipeline.py
+      - src/data/loader.py
+      - src/features/engineer.py
+      - src/models/train.py
+    outs:
+      - models/segmentation_pipeline.pkl
+    metrics:
+      - models/training_metrics.json:
+          cache: false
