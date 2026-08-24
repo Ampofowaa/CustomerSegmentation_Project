@@ -27,6 +27,26 @@ SPEND_COLS = [
     "MntGoldProds",
 ]
 
+# Historical + current campaign-acceptance flags, summed into a single
+# marketing-responsiveness signal (Total_Campaigns_Accepted).
+ACCEPTED_CMP_COLS = [
+    "AcceptedCmp1",
+    "AcceptedCmp2",
+    "AcceptedCmp3",
+    "AcceptedCmp4",
+    "AcceptedCmp5",
+    "Response",
+]
+
+# Purchase-count columns, summed for Avg_Spend_Per_Purchase's denominator.
+# Excludes NumWebVisitsMonth (browsing, not a completed purchase).
+PURCHASE_COUNT_COLS = [
+    "NumWebPurchases",
+    "NumStorePurchases",
+    "NumCatalogPurchases",
+    "NumDealsPurchases",
+]
+
 # --- Final feature set fed to the model ---------------------------------
 # ORDER MATTERS: StandardScaler.transform() only cares about column
 # position, not names. Train and inference must build this list identically,
@@ -34,11 +54,16 @@ SPEND_COLS = [
 FEATURES = [
     "Age",
     "Income",
+    "Recency",
+    "Customer_Tenure",
     "Total_Spending",
     "NumWebPurchases",
     "NumStorePurchases",
+    "NumCatalogPurchases",
     "NumWebVisitsMonth",
-    "Recency",
+    "NumDealsPurchases",
+    "Teenhome",
+    "Kidhome",
 ]
 
 # --- Cleaning thresholds --------------------------------------------------
@@ -51,6 +76,12 @@ RANDOM_STATE = 42  # fixes centroid init -> reproducible clusters across runs
 N_INIT = 10  # sklearn re-runs K-Means 10x and keeps the best (avoids bad local optima)
 K_SEARCH_RANGE = range(2, 10)
 
+# Fraction of variance PCA must retain when use_pca=True is passed to
+# build_pipeline()/fit_pipeline(). A float here tells sklearn's PCA to pick
+# however many components are needed to hit this threshold rather than a
+# fixed component count, so it adapts if FEATURES changes.
+PCA_VARIANCE = 0.90
+
 # --- Human-readable cluster labels ----------------------------------------
 # Set by inspecting cluster_profile() in the notebook after training — a
 # cluster number means nothing to a business stakeholder, a name does.
@@ -58,10 +89,13 @@ K_SEARCH_RANGE = range(2, 10)
 # random_state is fixed (it is, see RANDOM_STATE above) AND the training
 # data doesn't change. If you retrain on new data, re-check this mapping
 # against the new cluster_profile() output before trusting these labels.
+# Re-derived after enabling PCA in the pipeline (see PCA_VARIANCE above) --
+# the extra PCA step reshuffles which cluster ID lands on which segment,
+# so these indices don't match a pre-PCA run's.
 CLUSTER_NAMES = {
-    0: "Low-Engagement / At-Risk Customers",  # low income & spend, high recency (inactive)
-    1: "Premium Customers (Store-Focused)",  # high income & spend, older, store-heavy
-    2: "Digital Buyers",  # moderate-high spend, high web purchase share
-    3: "Budget Customers (Recently Active)",  # low income & spend, but low recency
-    4: "High-Value Customers",  # highest income & spend overall
+    0: "High-Value Customers (No Children)",  # highest income & spend, store-heavy, heaviest catalog usage
+    1: "Premium Teen-Family Shoppers (Store-Focused)",  # older, high income & spend, almost entirely teen households
+    2: "Deal-Seeking Large Families",  # mid income/spend, by far the heaviest deal usage, large families
+    3: "Low-Income Young Families (Browsing, Not Buying)",  # youngest, lowest income/spend, high visits, low purchases
+    4: "Budget Multi-Child Households",  # oldest, lowest income & spend, largest households (teens and young children)
 }

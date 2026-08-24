@@ -1,6 +1,7 @@
 # Customer Segmentation
 
 [![CI](https://github.com/Ampofowaa/CustomerSegmentation_Project/actions/workflows/ci.yaml/badge.svg)](https://github.com/Ampofowaa/CustomerSegmentation_Project/actions/workflows/ci.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A K-Means customer segmentation pipeline that clusters retail customers by
 purchasing behavior and demographics, served behind a FastAPI prediction
@@ -64,67 +65,90 @@ one row per customer. Columns cover:
 `src/data/loader.py` drops the ~1% of rows with missing `Income` and caps
 two known outliers (a handful of implausible birth years, one $666,666
 income value) — see `config.AGE_MAX` / `config.INCOME_MAX`. `src/features/engineer.py`
-derives `Age` and `Total_Spending` and assembles the final `config.FEATURES`
-set (7 features) that the model actually trains on. 2,216 of the original
-2,240 rows survive cleaning.
+derives `Age`, `Total_Spending`, and `Customer_Tenure`, and assembles the
+final `config.FEATURES` set (12 features) that the model actually trains
+on. 2,216 of the original 2,240 rows survive cleaning.
 
-### Why these 7 features (and not the rest)
+### Why these 12 features (and not the rest)
 
-`config.FEATURES = [Age, Income, Total_Spending, NumWebPurchases,
-NumStorePurchases, NumWebVisitsMonth, Recency]`. Everything else in the raw
-dataset was considered and dropped for a specific reason, not by accident —
-see the "Feature Selection Rationale" cell in `notebooks/Analysis_Model.ipynb`
-for the correlation numbers behind these calls:
+`config.FEATURES = [Age, Income, Recency, Customer_Tenure, Total_Spending,
+NumWebPurchases, NumStorePurchases, NumCatalogPurchases, NumWebVisitsMonth,
+NumDealsPurchases, Teenhome, Kidhome]`. Everything else in the raw dataset
+was considered and dropped for a specific reason, not by accident — see the
+"Feature Selection" section in `notebooks/Analysis_Model.ipynb` (grouped by
+theme: demographics, monetary value, recency/tenure, purchase channel,
+promotion responsiveness) for the correlation numbers behind these calls:
 
-- **`Kidhome` / `Teenhome` (and the engineered `TotalNo_Children`)** —
-  strongly correlated with `Income` (r ≈ -0.51) and `Total_Spending`
-  (r ≈ -0.50). K-Means clusters on Euclidean distance, so keeping a feature
-  that's just a proxy for income/spend would double-count that signal.
-  `add_total_children()` in `src/features/engineer.py` still computes
-  `TotalNo_Children` — it's available for exploration/reporting, it just
-  isn't part of the model matrix.
-- **`NumCatalogPurchases`** — highly correlated with `Income` (r ≈ 0.69) and
-  `Total_Spending` (r ≈ 0.78); `NumWebPurchases` and `NumStorePurchases`
-  already cover purchase-channel behavior, so this is redundant.
-- **`NumDealsPurchases`** — weak correlation with every other feature
-  (|r| < 0.11). It doesn't separate customers into meaningfully different
-  groups, so it's mostly noise for a distance-based algorithm.
-- **`AcceptedCmp1`–`5` and `Response`** — these record how customers reacted
-  to *past* campaigns. Using them to build segments that then drive *future*
+- **`TotalNo_Children`** (engineered from `Kidhome` + `Teenhome`) — blends
+  `Kidhome`'s real signal with `Teenhome`'s near-neutral one, diluting
+  rather than combining. `Kidhome` and `Teenhome` are kept individually
+  instead — each earns its place separately via a paired silhouette check,
+  not by mechanical correlation cutoff.
+- **`Avg_Spend_Per_Purchase`** (engineered: `Total_Spending` / total
+  purchases) — r ≈ 0.93 with `Total_Spending`, the strongest pairwise
+  correlation in the candidate pool, and its broader correlation profile is
+  essentially `Total_Spending`'s restated at a different scale. A rescaling,
+  not a new axis.
+- **`AcceptedCmp1`–`5` and `Response`** (aggregated into
+  `Total_Campaigns_Accepted`) — these record how customers reacted to
+  *past* campaigns. Using them to build segments that then drive *future*
   targeting would leak old targeting decisions into new ones.
 - **`Complain`** — 21 of 2,216 rows are 1; near-zero variance, contributes
-  almost nothing to distance-based clustering.
-- **`Customer_Tenure`** (engineered in `add_customer_tenure()`) — weakly
-  correlated with `Income`/`Total_Spending` (r ≈ 0.16) and largely redundant
-  with `Recency` for capturing engagement. Computed but not fed to the model.
+  almost nothing to distance-based clustering (even though its correlation
+  profile is about as clean as any candidate's).
 - **`Education`, `Marital_Status`** — categorical; K-Means needs numeric
-  distances, and one-hot-encoding them would add several low-signal
+  distances. `Marital_Status` has no natural order, so one-hot-encoding is
+  the only honest representation, and that would add several low-signal
   dimensions relative to the behavioral/value features already in play.
+  `Education` does have a natural order (`Basic` < `2n Cycle` <
+  `Graduation` < `Master` < `PhD`), so an ordinal encoding is a legitimate
+  option worth reconsidering in a future iteration — it just hasn't been
+  added yet.
+
+`NumCatalogPurchases` is the one feature kept *despite* a negative paired
+silhouette check (mean Δ -0.0049) — it names a real, distinct shopping
+channel on par with web and store, and that business case outweighs the
+statistical evidence, the same call already made for `Income`,
+`NumStorePurchases`, `NumWebPurchases`, and `Kidhome` elsewhere in that
+section.
 
 ## Results
 
-The current `models/segmentation_pipeline.pkl` (`StandardScaler` + `KMeans`,
+The current `models/segmentation_pipeline.pkl` (`StandardScaler` + `PCA`
+(`config.PCA_VARIANCE = 0.90`, 12 features -> 8 components) + `KMeans`,
 `k=5`, `random_state=42`) was fit on those 2,216 cleaned rows:
 
-| Cluster | Label                              | Size | Share |
-|--------:|-------------------------------------|-----:|------:|
-| 3       | Budget Customers (Recently Active)  |  562 |  25%  |
-| 0       | Low-Engagement / At-Risk Customers  |  531 |  24%  |
-| 2       | Digital Buyers                      |  454 |  20%  |
-| 4       | High-Value Customers                |  341 |  15%  |
-| 1       | Premium Customers (Store-Focused)   |  328 |  15%  |
+| Cluster | Label                                          | Size | Share |
+|--------:|-------------------------------------------------|-----:|------:|
+| 3       | Low-Income Young Families (Browsing, Not Buying) |  544 |  25%  |
+| 1       | Premium Teen-Family Shoppers (Store-Focused)     |  520 |  23%  |
+| 0       | High-Value Customers (No Children)               |  500 |  23%  |
+| 4       | Budget Multi-Child Households                    |  454 |  20%  |
+| 2       | Deal-Seeking Large Families                      |  198 |   9%  |
 
-Silhouette score: **0.188**. That's modest in absolute terms, which is
-typical for demographic/behavioral customer data where segments overlap
-rather than form tight, well-separated blobs — `evaluate_k_range()` in
-`src/models/train.py` was used to check `k=5` against the inertia/silhouette
-trade-off across a range of k before settling on it. The clusters are
-judged less by that number and more by whether the per-cluster profiles are
-distinct and actionable (e.g. `High-Value Customers` have the highest
-income and spend; `Low-Engagement / At-Risk Customers` have low spend and
-the highest recency, i.e. haven't purchased in a while) — see
-`cluster_profile()` in `src/models/train.py` and `config.CLUSTER_NAMES` for
-how cluster IDs were mapped to labels.
+Silhouette score: **0.200** (up from 0.180 without the PCA step). Still
+modest in absolute terms, which is typical for demographic/behavioral
+customer data where segments overlap rather than form tight, well-separated
+blobs — `evaluate_k_range()` in `src/models/train.py` was used to check
+`k=5` against the inertia/silhouette trade-off across a range of k before
+settling on it (silhouette alone peaks at `k=2`, which is too coarse to act
+on for this project's targeting use cases). Adding PCA was a deliberate
+experiment prompted by the gap between a low silhouette and a very high
+cluster-stability ARI (>0.99 across seeds, see `check_cluster_stability()`):
+that combination pointed at collinearity between the spend/purchase-count
+features diluting separation rather than the segments being noise, so PCA
+was added to strip that collinearity before KMeans. It raised silhouette
+modestly and *increased* stability (seed ARI 0.992->0.998, bootstrap ARI
+0.946->0.948) without materially changing which customers land in which
+segment (ARI of 0.96 between the old and new label sets) — set
+`use_pca=False` in `run_training_pipeline()` / `fit_pipeline()` to compare
+against the pre-PCA baseline. The clusters are judged less by the silhouette
+number and more by whether the per-cluster profiles are distinct and
+actionable (e.g. `High-Value Customers` have the highest income, spend, and
+catalog usage; `Deal-Seeking Large Families` are the smallest segment but by
+far the heaviest users of discounts) — see `cluster_profile()` in
+`src/models/train.py` and `config.CLUSTER_NAMES` for how cluster IDs were
+mapped to labels.
 
 These numbers regenerate on every `scripts/train.py` / `dvc repro` run and
 are written to `models/training_metrics.json` — check that file for the
@@ -139,7 +163,7 @@ current run's exact values rather than assuming this table stays in sync.
 ## Setup
 
 ```bash
-git clone <repo-url> && cd customer_segmentation
+git clone https://github.com/Ampofowaa/CustomerSegmentation_Project.git && cd customer_segmentation
 
 # Install everything (core + api + ui + notebook extras + dev tools)
 uv sync --all-extras
@@ -172,9 +196,18 @@ uv run streamlit run src/ui/customer_segmentation.py
 
 ## Running with Docker
 
+The API image bakes `models/` into it at build time (`COPY models/ ./models/`
+in `docker/Dockerfile.fastapi`, no runtime volume mount) — train first so
+that directory exists and holds a current pipeline:
+
 ```bash
+uv run python scripts/train.py   # or: uv run dvc repro
+
 docker compose up -d --build
 ```
+
+Rebuild (`--build`) any time you retrain locally — otherwise the containers
+keep serving whatever model was baked in at the last build.
 
 | Service   | URL                          |
 |-----------|-------------------------------|
@@ -202,21 +235,29 @@ curl -X POST http://localhost:8100/predict \
   -d '{
         "Age": 35,
         "Income": 50000,
+        "Recency": 30,
+        "Customer_Tenure": 4800,
         "Total_Spending": 1000,
         "NumWebPurchases": 10,
         "NumStorePurchases": 10,
+        "NumCatalogPurchases": 4,
         "NumWebVisitsMonth": 3,
-        "Recency": 30
+        "NumDealsPurchases": 2,
+        "Teenhome": 0,
+        "Kidhome": 0
       }'
 ```
 
 ```json
-{"cluster": 4, "label": "High-Value Customers"}
+{"cluster": 0, "label": "High-Value Customers (No Children)"}
 ```
 
 `POST /predict/batch` — upload a CSV with (at least) the same feature
 columns; any extra columns (e.g. a customer ID) are echoed back. Returns a
 downloadable CSV with `cluster`, `cluster_name`, and `scored_at` appended.
+The CSV's `cluster` column is 1-5 (a display-only shift for the person
+reading the file) — the `/predict` JSON response above stays 0-4, matching
+`config.CLUSTER_NAMES`.
 
 ```bash
 curl -X POST http://localhost:8100/predict/batch \

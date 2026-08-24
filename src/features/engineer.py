@@ -35,11 +35,26 @@ def add_customer_tenure(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_total_campaigns_accepted(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["Total_Campaigns_Accepted"] = df[config.ACCEPTED_CMP_COLS].sum(axis=1)
+    return df
+
+
+def add_avg_spend_per_purchase(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    total_purchases = df[config.PURCHASE_COUNT_COLS].sum(axis=1)
+    df["Avg_Spend_Per_Purchase"] = (df["Total_Spending"] / total_purchases).where(total_purchases > 0, 0.0)
+    return df
+
+
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     """Apply every engineered feature. Safe to call on cleaned raw data."""
     df = add_age(df)
     df = add_total_spending(df)
     df = add_total_children(df)
+    df = add_total_campaigns_accepted(df)
+    df = add_avg_spend_per_purchase(df)
     if "Dt_Customer" in df.columns:
         df = add_customer_tenure(df)
     return df

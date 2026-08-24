@@ -27,9 +27,10 @@ def predict_segment(feature_row: dict) -> dict:
     Score a single customer.
 
     feature_row: dict with keys matching config.FEATURES exactly, e.g.
-        {"Age": 35, "Income": 50000, "Total_Spending": 1000,
-         "NumWebPurchases": 10, "NumStorePurchases": 10,
-         "NumWebVisitsMonth": 3, "Recency": 30}
+        {"Age": 35, "Income": 50000, "Recency": 30, "Customer_Tenure": 4800,
+         "Total_Spending": 1000, "NumWebPurchases": 10, "NumStorePurchases": 10,
+         "NumCatalogPurchases": 4, "NumWebVisitsMonth": 3, "NumDealsPurchases": 2,
+         "Teenhome": 0, "Kidhome": 0}
 
     Returns: {"cluster": int, "cluster_name": str}
     """
