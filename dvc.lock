@@ -5,8 +5,8 @@ stages:
     deps:
     - path: config.py
       hash: md5
-      md5: 8bb3616254beb9207b67b7fa419d1f4b
-      size: 2796
+      md5: 2798213f574f748651df02905a212994
+      size: 4112
     - path: data/customer_segmentation.csv
       hash: md5
       md5: d732c77739db14936987f6f6fbd0e770
@@ -21,22 +21,22 @@ stages:
       size: 2263
     - path: src/features/engineer.py
       hash: md5
-      md5: 52f1c7c7b512665229cc3fd34ea1f0f5
-      size: 1599
+      md5: ea366d43b0ca1ef78ddffb435439d2e4
+      size: 2576
     - path: src/models/train.py
       hash: md5
-      md5: 1710bae0d6678f604b97e671871a6a1a
-      size: 3786
+      md5: 388755f1881208156ff3970e9eb32e6e
+      size: 9866
     - path: src/pipeline.py
       hash: md5
-      md5: 7c6462175cb8a352395a8287e223903e
-      size: 1394
+      md5: aa852e84fbe6aee035bc3152e41d0092
+      size: 2792
     outs:
     - path: models/segmentation_pipeline.pkl
       hash: md5
-      md5: ecc939357998597d47bcad32ccf9250c
-      size: 10809
+      md5: 7d17c5a9d27cd222bfc38f9ef22da2a1
+      size: 12841
     - path: models/training_metrics.json
       hash: md5
-      md5: 1a8cd991856db1fc9a7692efdce22735
-      size: 195
+      md5: 5638e9af0c93a2e47d33628bb03f8aa4
+      size: 689
