@@ -5,6 +5,7 @@ services:
       dockerfile: docker/Dockerfile.fastapi
     ports:
       - "8100:8000"
+    restart: unless-stopped
 
   streamlit:
     build:
@@ -16,3 +17,4 @@ services:
       - API_URL=http://api:8000
     depends_on:
       - api
+    restart: unless-stopped
