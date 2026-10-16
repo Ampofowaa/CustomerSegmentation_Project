@@ -20,6 +20,7 @@ from src.models.predict import predict_batch, predict_segment  # noqa: E402
 from src.models.train import fit_pipeline  # noqa: E402
 
 PREVIEW_ROW_LIMIT = 200
+SAMPLE_CSV_PATH = config.PROJECT_ROOT / "sample_batch_customers.csv"
 
 # Set by Docker Compose (http://api:8000), or locally to http://localhost:8000,
 # to call the FastAPI service. Unset (e.g. on Streamlit Community Cloud), the
@@ -153,11 +154,29 @@ with batch_tab:
         "are kept in the output."
     )
 
+    sample_bytes = SAMPLE_CSV_PATH.read_bytes()
+    st.caption("No file handy? Score the 8-customer sample, or download it to see the expected format.")
+    sample_col, download_col = st.columns(2)
+    use_sample = sample_col.button("Score the sample file")
+    download_col.download_button(
+        "Download sample CSV",
+        data=sample_bytes,
+        file_name=SAMPLE_CSV_PATH.name,
+        mime="text/csv",
+        on_click="ignore",
+    )
+
     uploaded_file = st.file_uploader("Customer CSV", type="csv")
 
-    if uploaded_file is not None and st.button("Score CSV"):
+    to_score: tuple[str, bytes] | None = None
+    if use_sample:
+        to_score = (SAMPLE_CSV_PATH.name, sample_bytes)
+    elif uploaded_file is not None and st.button("Score CSV"):
+        to_score = (uploaded_file.name, uploaded_file.getvalue())
+
+    if to_score is not None:
         try:
-            content, file_name = score_csv(uploaded_file.name, uploaded_file.getvalue())
+            content, file_name = score_csv(*to_score)
             st.success("Scored successfully.")
 
             st.download_button(
@@ -165,6 +184,7 @@ with batch_tab:
                 data=content,
                 file_name=file_name,
                 mime="text/csv",
+                on_click="ignore",
             )
 
             scored_df = pd.read_csv(io.BytesIO(content))
