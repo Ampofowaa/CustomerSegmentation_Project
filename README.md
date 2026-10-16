@@ -5,7 +5,7 @@
 
 Groups 2,216 retail customers into five stable, plain-English segments so a marketing team can send each group a different campaign instead of one offer for everyone.
 
-**[Live demo](https://customersegmentationproject-ag4tkoe3yjgimkbw73ynsm.streamlit.app/)**: look up any customer's segment or score a CSV of customers. The first load can take up to a minute if the app has been asleep.
+**[Live demo](https://customersegmentationproject-ag4tkoe3yjgimkbw73ynsm.streamlit.app/)**: look up any customer's segment or score a CSV of customers. Hosted on a free tier: if it's asleep, click **"Yes, get this app back up!"** and allow about a minute.
 
 ![Customer segments projected onto two principal components](docs/images/cluster_scatter.png)
 <!-- TODO: add a screenshot of the Streamlit app (Single / Batch Prediction tabs) -->
