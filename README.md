@@ -41,7 +41,7 @@ Recency is flat across all five segments, so win-back campaigns should filter in
 ## What's built around the model
 
 - **Python package, not just a notebook:** `src/` holds load → clean → engineer → fit, and the notebook imports it rather than duplicating logic.
-- **Serving:** a FastAPI service (`POST /predict` for one customer, `POST /predict/batch` for a CSV) and a Streamlit app for marketers, both containerised with Docker Compose.
+- **Serving:** a FastAPI service (`POST /predict` for one customer, `POST /predict/batch` for a CSV) and a Streamlit app for marketers, both containerised with Docker Compose. The app can also run standalone, scoring with the same prediction code in-process, so it can be hosted as a free public demo.
 - **Reproducibility:** DVC pipeline, pinned dependencies (`uv.lock`), fixed random seed, and stability checks recorded on every training run.
 - **Quality:** pytest unit tests and a GitHub Actions workflow running ruff, black, mypy and pytest on every push.
 
