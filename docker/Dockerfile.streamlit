@@ -10,8 +10,10 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --extra ui --no-install-project
 
-# Copy only the code this service needs
-COPY src/ui/ ./src/ui/
+# Copy only the code this service needs (the UI imports config + src for
+# its in-process fallback, so ship the package, but no data or model)
+COPY config.py ./
+COPY src/ ./src/
 
 
 # ---- Final stage ----
@@ -21,9 +23,12 @@ WORKDIR /app
 
 # Bring over the built virtual environment and code from the builder
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/src/ui ./src/ui
+COPY --from=builder /app/config.py ./config.py
+COPY --from=builder /app/src ./src
 
 ENV PATH="/app/.venv/bin:$PATH"
+# Call the FastAPI service by default; docker-compose.yml sets the same value.
+ENV API_URL=http://api:8000
 
 EXPOSE 8501
 
