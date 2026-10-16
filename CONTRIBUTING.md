@@ -11,8 +11,8 @@ Full setup, training, serving and API reference. For what the project does and w
 ## Setup
 
 ```bash
-git clone https://github.com/Ampofowaa/CustomerSegmentation_Project.git
-cd CustomerSegmentation_Project
+git clone https://github.com/Ampofowaa/customer-segmentation.git
+cd customer-segmentation
 
 # Install everything (core + api + ui + notebook extras + dev tools)
 uv sync --all-extras
@@ -91,7 +91,7 @@ With no `API_URL` set, the app uses the same `src.models.predict` functions
 as the API, in-process, so it can be hosted on its own:
 
 1. Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub and choose **Create app → Deploy a public app from GitHub**.
-2. Repository `Ampofowaa/CustomerSegmentation_Project`, branch `main`, main file `src/ui/customer_segmentation.py`.
+2. Repository `Ampofowaa/customer-segmentation`, branch `main`, main file `src/ui/customer_segmentation.py`.
 3. Under **Advanced settings**, choose Python 3.12. Leave secrets empty and don't set `API_URL`.
 4. Deploy. Dependencies come from `src/ui/requirements.txt` (keep it in step with `uv.lock`).
 

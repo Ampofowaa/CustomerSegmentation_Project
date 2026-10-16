@@ -1,6 +1,6 @@
 # Customer Segmentation for Targeted Marketing
 
-[![CI](https://github.com/Ampofowaa/CustomerSegmentation_Project/actions/workflows/ci.yaml/badge.svg)](https://github.com/Ampofowaa/CustomerSegmentation_Project/actions/workflows/ci.yaml)
+[![CI](https://github.com/Ampofowaa/customer-segmentation/actions/workflows/ci.yaml/badge.svg)](https://github.com/Ampofowaa/customer-segmentation/actions/workflows/ci.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Groups 2,216 retail customers into five stable, plain-English segments so a marketing team can send each group a different campaign instead of one offer for everyone.
@@ -55,8 +55,8 @@ Recency is flat across all five segments, so win-back campaigns should filter in
 ## Run it
 
 ```bash
-git clone https://github.com/Ampofowaa/CustomerSegmentation_Project.git
-cd CustomerSegmentation_Project
+git clone https://github.com/Ampofowaa/customer-segmentation.git
+cd customer-segmentation
 uv sync --all-extras                          # Python 3.12 + uv
 uv run python scripts/train.py                # trains and saves the model (not committed)
 uv run pytest
