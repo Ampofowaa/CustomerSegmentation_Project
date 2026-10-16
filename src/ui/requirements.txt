@@ -1,0 +1,8 @@
+# Used only by Streamlit Community Cloud, which installs from the entrypoint's
+# folder. Local and Docker installs use pyproject.toml + uv.lock; keep these
+# versions in step with uv.lock.
+joblib==1.5.3
+pandas==3.0.5
+scikit-learn==1.9.0
+streamlit==1.61.1
+requests==2.34.2

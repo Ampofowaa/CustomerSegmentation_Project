@@ -1,16 +1,104 @@
 import io
 import os
 import re
+import sys
+from pathlib import Path
 
+import joblib
 import pandas as pd
 import requests
 import streamlit as st
 
+# `streamlit run` only puts this file's folder on sys.path; add the repo root
+# so `config` and `src` import the same way they do everywhere else.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+import config  # noqa: E402
+from src.data.loader import load_clean_data  # noqa: E402
+from src.features.engineer import build_model_matrix, engineer_features  # noqa: E402
+from src.models.predict import predict_batch, predict_segment  # noqa: E402
+from src.models.train import fit_pipeline  # noqa: E402
+
 PREVIEW_ROW_LIMIT = 200
 
-# In Docker Compose this resolves to the "api" service name; override
-# locally with API_URL=http://localhost:8000 if running outside Compose.
-API_URL = os.environ.get("API_URL", "http://api:8000")
+# Set by Docker Compose (http://api:8000), or locally to http://localhost:8000,
+# to call the FastAPI service. Unset (e.g. on Streamlit Community Cloud), the
+# app scores in-process with the same src.models.predict functions the API uses.
+API_URL = os.environ.get("API_URL")
+
+
+class ScoringError(Exception):
+    """A user-facing scoring failure, from either the API or in-process path."""
+
+
+@st.cache_resource(show_spinner="Training the model (first start only)...")
+def ensure_model() -> None:
+    """Train and save the pipeline once if no model file exists yet.
+
+    The .pkl isn't committed, so a fresh deployment has none. This is a plain
+    fit (same features and settings as scripts/train.py), without the
+    stability checks or metrics file, so startup stays fast."""
+    if config.PIPELINE_PATH.exists():
+        return
+    X = build_model_matrix(engineer_features(load_clean_data()))
+    pipeline, _, _ = fit_pipeline(X, use_pca=True)
+    config.MODEL_DIR.mkdir(exist_ok=True)
+    joblib.dump(pipeline, config.PIPELINE_PATH)
+
+
+def _api_error(response: requests.Response, e: Exception) -> ScoringError:
+    detail = response.json().get("detail", str(e)) if response.content else str(e)
+    return ScoringError(str(detail))
+
+
+def score_one(payload: dict) -> tuple[int, str]:
+    """Return (0-indexed cluster, label) for one customer."""
+    if API_URL is None:
+        try:
+            result = predict_segment(payload)
+        except ValueError as e:
+            raise ScoringError(str(e))
+        return result["cluster"], result["cluster_name"]
+
+    try:
+        response = requests.post(f"{API_URL}/predict", json=payload, timeout=20)
+        response.raise_for_status()
+    except requests.exceptions.ConnectionError:
+        raise ScoringError(f"Could not reach the prediction API at {API_URL}. Is it running?")
+    except requests.exceptions.HTTPError as e:
+        raise _api_error(response, e)
+    result = response.json()
+    return result["cluster"], result["label"]
+
+
+def score_csv(name: str, content: bytes) -> tuple[bytes, str]:
+    """Return (scored CSV bytes, download file name) for an uploaded CSV."""
+    if API_URL is None:
+        try:
+            scored = predict_batch(pd.read_csv(io.BytesIO(content)))
+        except (ValueError, pd.errors.ParserError, pd.errors.EmptyDataError) as e:
+            raise ScoringError(str(e))
+        # Same display-only 1-5 shift the API applies to its CSV output.
+        scored["cluster"] = scored["cluster"] + 1
+        stamp = pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d_%H-%M-%S")
+        return scored.to_csv(index=False).encode(), f"segmented_customers_{stamp}.csv"
+
+    try:
+        files = {"file": (name, content, "text/csv")}
+        response = requests.post(f"{API_URL}/predict/batch", files=files, timeout=60)
+        response.raise_for_status()
+    except requests.exceptions.ConnectionError:
+        raise ScoringError(f"Could not reach the prediction API at {API_URL}. Is it running?")
+    except requests.exceptions.HTTPError as e:
+        raise _api_error(response, e)
+
+    disposition = response.headers.get("content-disposition", "")
+    match = re.search(r"filename=([^;]+)", disposition)
+    return response.content, match.group(1).strip() if match else "segmented_customers.csv"
+
+
+if API_URL is None:
+    ensure_model()
 
 st.title("Customer Segmentation App")
 
@@ -48,18 +136,13 @@ with single_tab:
             "Kidhome": kidhome,
         }
         try:
-            response = requests.post(f"{API_URL}/predict", json=payload, timeout=20)
-            response.raise_for_status()
-            result = response.json()
-            # Display-only: the API's `cluster` field stays 0-indexed
-            # (matches config.CLUSTER_NAMES); shift to 1-5 here since this
-            # is the number a marketer actually reads.
-            st.success(f"Predicted Segment: {result['label']} (Cluster {result['cluster'] + 1})")
-        except requests.exceptions.ConnectionError:
-            st.error(f"Could not reach the prediction API at {API_URL}. Is it running?")
-        except requests.exceptions.HTTPError as e:
-            detail = response.json().get("detail", str(e)) if response.content else str(e)
-            st.error(f"Prediction failed: {detail}")
+            cluster, label = score_one(payload)
+            # Display-only: the `cluster` id stays 0-indexed (matches
+            # config.CLUSTER_NAMES); shift to 1-5 here since this is the
+            # number a marketer actually reads.
+            st.success(f"Predicted Segment: {label} (Cluster {cluster + 1})")
+        except ScoringError as e:
+            st.error(f"Prediction failed: {e}")
 
 with batch_tab:
     st.write(
@@ -74,23 +157,17 @@ with batch_tab:
 
     if uploaded_file is not None and st.button("Score CSV"):
         try:
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-            response = requests.post(f"{API_URL}/predict/batch", files=files, timeout=60)
-            response.raise_for_status()
+            content, file_name = score_csv(uploaded_file.name, uploaded_file.getvalue())
             st.success("Scored successfully.")
-
-            disposition = response.headers.get("content-disposition", "")
-            match = re.search(r"filename=([^;]+)", disposition)
-            file_name = match.group(1).strip() if match else "segmented_customers.csv"
 
             st.download_button(
                 "Download segmented CSV",
-                data=response.content,
+                data=content,
                 file_name=file_name,
                 mime="text/csv",
             )
 
-            scored_df = pd.read_csv(io.BytesIO(response.content))
+            scored_df = pd.read_csv(io.BytesIO(content))
             if len(scored_df) > PREVIEW_ROW_LIMIT:
                 st.caption(
                     f"Showing the first {PREVIEW_ROW_LIMIT} of {len(scored_df)} rows. "
@@ -99,8 +176,5 @@ with batch_tab:
                 st.dataframe(scored_df.head(PREVIEW_ROW_LIMIT))
             else:
                 st.dataframe(scored_df)
-        except requests.exceptions.ConnectionError:
-            st.error(f"Could not reach the prediction API at {API_URL}. Is it running?")
-        except requests.exceptions.HTTPError as e:
-            detail = response.json().get("detail", str(e)) if response.content else str(e)
-            st.error(f"Batch scoring failed: {detail}")
+        except ScoringError as e:
+            st.error(f"Batch scoring failed: {e}")
